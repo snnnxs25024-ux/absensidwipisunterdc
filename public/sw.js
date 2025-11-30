@@ -1,20 +1,27 @@
 
-const CACHE_NAME = 'absensi-ipi-v1';
+const CACHE_NAME = 'absensi-ipi-v2';
+// Only cache local critical files during install.
+// External CDNs will be cached at runtime (when they are fetched).
 const urlsToCache = [
   '/',
   '/index.html',
-  '/favicon/favicon.svg'
+  '/index.tsx',
+  '/favicon/favicon.svg',
+  '/manifest.json'
 ];
 
-// Install SW and cache static assets
+// Install SW
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
+        // We use addAll but don't fail strictly if one fails (to ensure SW installs)
+        // However, for strict offline, we ideally want them all. 
+        // We stick to local files here to minimize failure risk during install.
         return cache.addAll(urlsToCache);
       })
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 // Activate SW and clean up old caches
@@ -33,51 +40,49 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch strategy: Network first, fall back to cache
+// Fetch strategy
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // List of domains we want to cache (App itself + CDNs)
-  const allowedDomains = [
-    self.location.hostname,       // The app itself
-    'aistudiocdn.com',            // React, Supabase JS, etc.
-    'cdn.tailwindcss.com',        // Tailwind
-    'fonts.googleapis.com',       // Fonts CSS
-    'fonts.gstatic.com'           // Font files
-  ];
+  // Determine if we should cache this request
+  const isLocal = url.hostname === self.location.hostname;
+  const isCdn = [
+    'aistudiocdn.com',
+    'cdn.tailwindcss.com',
+    'fonts.googleapis.com',
+    'fonts.gstatic.com'
+  ].some(domain => url.hostname.includes(domain));
 
-  // Check if the request domain is in our allowed list
-  const isAllowed = allowedDomains.some(domain => url.hostname.includes(domain));
-
-  // Explicitly ignore Supabase API calls (let them be handled by the app logic/network)
-  const isSupabaseApi = url.hostname.includes('supabase.co');
-
-  // If it's an external API request or not in our allowed CDN list, don't cache it
-  if (!isAllowed || isSupabaseApi) {
+  // Skip Supabase API calls from caching strategies to ensure fresh data
+  if (url.hostname.includes('supabase.co')) {
     return;
   }
 
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Check if we received a valid response
-        if (!response || response.status !== 200 || response.type !== 'cors' && response.type !== 'basic') {
-          return response;
-        }
+  // Strategy: Stale-While-Revalidate for static assets (HTML, JS, CSS, Images)
+  // This serves cached content instantly, then updates the cache in the background.
+  if (isLocal || isCdn) {
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        const networkFetch = fetch(event.request).then((response) => {
+          // Check if valid response
+          if (!response || response.status !== 200 || response.type === 'error') {
+            return response;
+          }
 
-        // Clone the response to put one in the cache
-        const responseToCache = response.clone();
-
-        caches.open(CACHE_NAME)
-          .then((cache) => {
+          // Update cache with new version
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
           });
 
-        return response;
+          return response;
+        }).catch(() => {
+          // Network failed, do nothing (we rely on cache match below)
+        });
+
+        // Return cached response if found, else wait for network
+        return cachedResponse || networkFetch;
       })
-      .catch(() => {
-        // If network fails, try to serve from cache
-        return caches.match(event.request);
-      })
-  );
+    );
+  }
 });
