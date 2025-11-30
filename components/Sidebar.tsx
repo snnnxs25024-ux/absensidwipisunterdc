@@ -55,7 +55,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
       <aside className={`fixed top-0 left-0 h-full w-64 bg-white flex flex-col shadow-xl z-40 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="text-center">
             <div className="bg-blue-600 text-white p-6">
-                <h1 className="text-xl font-bold tracking-wider">ABSENSI NEXUS</h1>
+                <h1 className="text-xl font-bold tracking-wider">ABSENSI IPI</h1>
                 <p className="text-sm opacity-90">SUNTER DC</p>
             </div>
             <div className="border-b-4 border-blue-500"></div>
@@ -77,7 +77,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
           </ul>
         </nav>
         <div className="mt-auto text-center text-xs text-gray-400 p-4">
-          <p>&copy; {new Date().getFullYear()} Nexus Sunter DC</p>
+          <p>&copy; {new Date().getFullYear()} IPI Sunter DC</p>
           <p>Version 1.0.0</p>
         </div>
       </aside>

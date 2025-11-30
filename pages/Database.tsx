@@ -118,7 +118,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   const handleDownloadTemplate = () => {
     const headers = ['opsId', 'fullName', 'nik', 'phone', 'contractType', 'department', 'status'];
     const sampleData = [{ opsId: 'NEX999', fullName: 'John Doe', nik: '3201010101010001', phone: '081298765432',
-      contractType: 'Daily Worker Vendor - NEXUS', department: 'SOC Operator', status: 'Active'
+      contractType: 'Daily Worker Vendor - IPI', department: 'SOC Operator', status: 'Active'
     }];
     const worksheet = XLSX.utils.json_to_sheet(sampleData, { header: headers });
     const workbook = XLSX.utils.book_new();
@@ -180,7 +180,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             existingOpsIds.add(opsId.toLowerCase());
             workersToInsert.push({
                 opsId: opsId, fullName: row.fullName, nik: row.nik.toString(), phone: row.phone.toString(),
-                contractType: 'Daily Worker Vendor - NEXUS', department: row.department, status: row.status,
+                contractType: 'Daily Worker Vendor - IPI', department: row.department, status: row.status,
                 createdAt: new Date().toISOString(),
             });
         }
@@ -358,7 +358,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             <InputField label="Nama Lengkap" name="fullName" defaultValue={selectedWorker?.fullName} required />
             <InputField label="NIK" name="nik" defaultValue={selectedWorker?.nik} required />
             <InputField label="No HP" name="phone" defaultValue={selectedWorker?.phone} required />
-            <SelectField label="Contract Type" name="contractType" defaultValue={selectedWorker?.contractType} options={['Daily Worker Vendor - NEXUS']} required />
+            <SelectField label="Contract Type" name="contractType" defaultValue={selectedWorker?.contractType} options={['Daily Worker Vendor - IPI']} required />
             <SelectField label="Departemen" name="department" defaultValue={selectedWorker?.department} options={['SOC Operator', 'Cache', 'Return', 'Inventory']} required />
             <SelectField label="Status" name="status" defaultValue={selectedWorker?.status} options={['Active', 'Non Active', 'Blacklist']} required />
             <div className="md:col-span-2 pt-4">

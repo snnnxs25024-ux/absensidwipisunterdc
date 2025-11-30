@@ -201,7 +201,7 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col">
         <div className="lg:hidden p-4 flex justify-between items-center bg-white border-b">
            <div>
-              <h1 className="text-lg font-bold text-blue-600">ABSENSI NEXUS</h1>
+              <h1 className="text-lg font-bold text-blue-600">ABSENSI IPI</h1>
               <p className="text-xs text-gray-500">SUNTER DC</p>
            </div>
           <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-gray-600">
