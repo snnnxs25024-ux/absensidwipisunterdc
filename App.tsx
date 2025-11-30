@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -100,21 +101,43 @@ const App: React.FC = () => {
 
     } catch (err: any) {
       console.error("Detailed Error:", err);
-      const getCircularReplacer = () => {
-        const seen = new WeakSet();
-        return (key: any, value: any) => {
-          if (typeof value === "object" && value !== null) {
-            if (seen.has(value)) return "[Circular Reference]";
-            seen.add(value);
+      
+      let detailedMessage = '';
+      
+      if (err instanceof Error) {
+        // Handle native Error objects (like network errors)
+        detailedMessage = JSON.stringify({
+            name: err.name,
+            message: err.message,
+            stack: err.stack
+        }, null, 2);
+      } else if (typeof err === 'object' && err !== null) {
+         // Handle Supabase error objects
+          const getCircularReplacer = () => {
+            const seen = new WeakSet();
+            return (key: any, value: any) => {
+              if (typeof value === "object" && value !== null) {
+                if (seen.has(value)) return "[Circular Reference]";
+                seen.add(value);
+              }
+              return value;
+            };
+          };
+          try {
+            detailedMessage = JSON.stringify(err, getCircularReplacer(), 2);
+          } catch (e) {
+            detailedMessage = String(err);
           }
-          return value;
-        };
-      };
-      let detailedMessage = JSON.stringify(err, getCircularReplacer(), 2);
-      const errorMessageString = (typeof err?.message === 'string') ? err.message : '';
+      } else {
+          detailedMessage = String(err);
+      }
+
+      const errorMessageString = (typeof err?.message === 'string') ? err.message : String(err);
+      
       if (errorMessageString.includes("relation") && errorMessageString.includes("does not exist")) {
           detailedMessage += `\n\n**Suggestion:**\nA required table was not found. Please ensure these tables exist in your Supabase project: \`workers\`, \`attendance_sessions\`, \`attendance_records\`.`;
       }
+      
       setError(detailedMessage);
     } finally {
       setLoading(false);
@@ -139,9 +162,9 @@ const App: React.FC = () => {
           <div className="bg-white p-6 rounded-lg border border-red-200 shadow-lg w-full max-w-3xl">
             <h2 className="font-bold text-2xl mb-4 text-red-700">Error: Could not fetch data</h2>
             <p className="text-base text-gray-600 mb-4">
-              There was a problem communicating with the database. This is usually due to a misconfiguration in your Supabase project (like a missing or misnamed table).
+              There was a problem communicating with the database. This is usually due to a misconfiguration in your Supabase project (like a missing table) or a network issue.
             </p>
-            <p className="text-sm font-semibold text-gray-700 mb-2">Detailed Error from Supabase:</p>
+            <p className="text-sm font-semibold text-gray-700 mb-2">Detailed Error:</p>
             <pre className="text-xs text-left bg-gray-50 p-4 rounded-lg w-full overflow-x-auto whitespace-pre-wrap">{error}</pre>
           </div>
         </div>
