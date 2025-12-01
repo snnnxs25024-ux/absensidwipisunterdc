@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Modal from '../components/Modal';
@@ -8,6 +7,7 @@ import DeleteIcon from '../components/icons/DeleteIcon';
 
 interface AttendanceProps {
   workers: Worker[];
+  attendanceHistory: AttendanceSession[];
   refreshData: () => void;
   activeSession: Omit<AttendanceSession, 'records' | 'id'> | null;
   setActiveSession: React.Dispatch<React.SetStateAction<Omit<AttendanceSession, 'records' | 'id'> | null>>;
@@ -15,13 +15,19 @@ interface AttendanceProps {
   setActiveRecords: React.Dispatch<React.SetStateAction<Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'>[]>>;
 }
 
-const divisionToDepartmentMap: { [key: string]: Worker['department'] | Worker['department'][] } = {
-    'ASM2': 'SOC Operator',
-    'CACHE': 'Cache',
-    'INVENTORY': 'Inventory',
-    'RETURN': 'Return',
-    'TP SUNTER 1': ['SOC Operator', 'Cache', 'Return', 'Inventory'],
-    'TP SUNTER 2': ['SOC Operator', 'Cache', 'Return', 'Inventory'],
+// Logic to determine allowed departments based on Division Name keywords
+const getAllowedDepartments = (division: string): string[] => {
+    const div = division.toUpperCase();
+    if (div.includes('ASM')) return ['SOC Operator'];
+    if (div.includes('CACHE')) return ['Cache'];
+    if (div.includes('INVENTORY')) return ['Inventory'];
+    if (div.includes('RETURN')) return ['Return'];
+    if (div.includes('TP SUNTER')) return ['SOC Operator', 'Cache', 'Return', 'Inventory'];
+    
+    // Default fallback: If unknown division, restrict or allow all? 
+    // Allowing all for unknown divisions prevents blocking if a new division name is used validly.
+    // But for safety in this specific app context, we return the broad list.
+    return ['SOC Operator', 'Cache', 'Return', 'Inventory'];
 };
 
 const shiftIdOptions = [
@@ -36,7 +42,7 @@ const shiftIdOptions = [
 ];
 
 const Attendance: React.FC<AttendanceProps> = ({ 
-  workers, refreshData, activeSession, setActiveSession, activeRecords, setActiveRecords,
+  workers, attendanceHistory, refreshData, activeSession, setActiveSession, activeRecords, setActiveRecords,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(!activeSession);
   const [opsIdInput, setOpsIdInput] = useState('');
@@ -88,24 +94,56 @@ const Attendance: React.FC<AttendanceProps> = ({
           return;
       }
 
-      const allowedDepartment = divisionToDepartmentMap[activeSession.division];
-      if (allowedDepartment) {
-          const isAllowed = Array.isArray(allowedDepartment) ? allowedDepartment.includes(worker.department) : worker.department === allowedDepartment;
-          if (!isAllowed) {
-              setError(`Worker ${worker.fullName} (${worker.department}) is not allowed in ${activeSession.division} division.`);
-              setOpsIdInput('');
-              return;
-          }
-      }
-
-      if (activeRecords.some(r => r.opsId === worker.opsId)) {
-          setError(`Worker ${worker.fullName} has already been scanned in this session.`);
+      // Department Validation Logic
+      const allowedDepartments = getAllowedDepartments(activeSession.division);
+      if (!allowedDepartments.includes(worker.department)) {
+          setError(`REJECTED: Worker ${worker.fullName} is '${worker.department}'. Division ${activeSession.division} only allows: ${allowedDepartments.join(', ')}.`);
           setOpsIdInput('');
           return;
       }
 
+      // Check duplications in current session (in memory)
+      if (activeRecords.some(r => r.opsId === worker.opsId)) {
+          setError(`Worker ${worker.fullName} has already been scanned in THIS session.`);
+          setOpsIdInput('');
+          return;
+      }
+
+      // Check duplications in OTHER sessions for the SAME DATE (Database history check)
+      const alreadyScannedInHistory = attendanceHistory.some(session => 
+        session.date === activeSession.date && 
+        session.records.some(r => r.workerId === worker.id && !r.is_takeout)
+      );
+
+      if (alreadyScannedInHistory) {
+          // Find which session they are in for clearer error message
+          const existingSession = attendanceHistory.find(session => 
+            session.date === activeSession.date && 
+            session.records.some(r => r.workerId === worker.id && !r.is_takeout)
+          );
+          const shiftName = existingSession ? existingSession.shiftTime : 'another shift';
+          
+          setError(`Double Scan Rejected: ${worker.fullName} is already present in ${shiftName} today.`);
+          setOpsIdInput('');
+          return;
+      }
+
+      // Logic to prevent premature "Auto Checkout" visual bug.
+      // If the session is for TODAY, use the current real time.
+      // If it's a backdated session, use the shift start time.
+      let timestamp = new Date().toISOString();
+      const todayStr = new Date().toISOString().split('T')[0];
+      
+      if (activeSession.date !== todayStr) {
+          // Backdated entry: Force timestamp to shift start time to match the logic
+          timestamp = new Date(activeSession.date + 'T' + activeSession.shiftTime.split(' - ')[0]).toISOString();
+      }
+
       const newRecord: Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'> = {
-          workerId: worker.id, opsId: worker.opsId, fullName: worker.fullName, timestamp: new Date().toISOString(),
+          workerId: worker.id, 
+          opsId: worker.opsId, 
+          fullName: worker.fullName, 
+          timestamp: timestamp,
       };
       setActiveRecords(prev => [newRecord, ...prev]);
       setError(null);
@@ -249,7 +287,7 @@ const Attendance: React.FC<AttendanceProps> = ({
                             <tr>
                                 <th className="p-3 font-semibold rounded-tl-lg">OpsID</th>
                                 <th className="p-3 font-semibold">Nama Lengkap</th>
-                                <th className="p-3 font-semibold">Shift Jam Masuk</th>
+                                <th className="p-3 font-semibold">Jam Masuk (Real)</th>
                                 <th className="p-3 font-semibold">Status</th>
                                 <th className="p-3 font-semibold text-center rounded-tr-lg">Hapus</th>
                             </tr>
@@ -259,7 +297,7 @@ const Attendance: React.FC<AttendanceProps> = ({
                                 <tr key={record.workerId} className="hover:bg-gray-50">
                                     <td className="p-3">{record.opsId}</td>
                                     <td className="p-3">{record.fullName}</td>
-                                    <td className="p-3">{activeSession.shiftTime.split(' - ')[0]}</td>
+                                    <td className="p-3">{new Date(record.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</td>
                                     <td className="p-3 text-green-600 font-semibold">Hadir</td>
                                     <td className="p-3 text-center">
                                       <button onClick={() => handleRemoveActiveRecord(record.workerId)} className="text-red-500 hover:text-red-700 transition-colors p-1" aria-label={`Remove ${record.fullName}`}>

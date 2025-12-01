@@ -177,6 +177,7 @@ const App: React.FC = () => {
       case 'Absensi':
         return <Attendance 
                   workers={workers} 
+                  attendanceHistory={attendanceHistory}
                   refreshData={fetchData}
                   activeSession={activeSession}
                   setActiveSession={setActiveSession}
