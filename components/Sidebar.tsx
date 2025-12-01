@@ -78,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
         </nav>
         <div className="mt-auto text-center text-xs text-gray-400 p-4">
           <p>&copy; {new Date().getFullYear()} SRF25024</p>
-          <p>Version 2.2.0</p>
+          <p>Version 2.3.0</p>
         </div>
       </aside>
     </>
