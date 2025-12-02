@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -10,6 +11,7 @@ import DeleteIcon from '../components/icons/DeleteIcon';
 import { supabase } from '../lib/supabaseClient';
 import CopyIcon from '../components/icons/CopyIcon';
 import EditIcon from '../components/icons/EditIcon';
+import CheckIcon from '../components/icons/CheckIcon';
 
 
 interface DashboardProps {
@@ -179,7 +181,11 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [isDetailReportModalOpen, setIsDetailReportModalOpen] = useState(false);
     const [detailReportData, setDetailReportData] = useState<{ workerName: string; period: string; dates: { date: string; shiftTime: string }[], total: number } | null>(null);
     const [isEditingSession, setIsEditingSession] = useState(false);
+    
+    // Copy Feature States
     const [isCopyMenuOpen, setIsCopyMenuOpen] = useState(false);
+    const [copyFeedback, setCopyFeedback] = useState(false);
+    const [toast, setToast] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
 
     useEffect(() => {
         if (selectedSession?.id) {
@@ -192,6 +198,16 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             }
         }
     }, [attendanceHistory, selectedSession?.id]);
+
+    // Timer to hide toast
+    useEffect(() => {
+        if (toast.show) {
+            const timer = setTimeout(() => {
+                setToast({ show: false, message: '' });
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [toast.show]);
 
     const activeWorkers = workers.filter(w => w.status === 'Active').length;
 
@@ -550,7 +566,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
       const validRecords = selectedSession.records.filter(record => !record.is_takeout);
       
       if (validRecords.length === 0) {
-          alert('No records to copy in this session.');
+          setToast({ show: true, message: 'No records to copy.' });
           return;
       }
 
@@ -564,25 +580,32 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
           // Format: OpsID [TAB] ShiftID [TAB] SUNTER DC
           const shiftId = selectedSession.shiftId;
           const location = "SUNTER DC";
-          textToCopy = validRecords.map(record => `${record.opsId}\t${shiftId}\t${shiftId}\t${location}`).join('\n');
+          textToCopy = validRecords.map(record => `${record.opsId}\t${shiftId}\t${location}`).join('\n');
       }
       
       if (textToCopy) {
           navigator.clipboard.writeText(textToCopy).then(() => {
-              const msg = mode === 'opsId' 
-                ? `${validRecords.length} OpsIDs copied!` 
-                : `${validRecords.length} rows copied (OpsID, ShiftID, Location) for Excel/Sheets.`;
-              alert(msg);
+              // UX: Close menu immediately, trigger visual feedback on button
               setIsCopyMenuOpen(false);
+              setCopyFeedback(true);
+              setToast({
+                  show: true,
+                  message: mode === 'opsId' 
+                    ? `✅ Berhasil menyalin ${validRecords.length} OpsID!` 
+                    : `✅ Berhasil menyalin ${validRecords.length} Baris Format Upload!`
+              });
+              
+              // Reset button visual state after 2 seconds
+              setTimeout(() => setCopyFeedback(false), 2000);
           }, (err) => {
-              alert('Failed to copy data.');
+              setToast({ show: true, message: '❌ Gagal menyalin data.' });
               console.error('Copy failed', err);
           });
       }
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 relative">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                 <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
                 <div className="flex flex-wrap gap-2">
@@ -846,13 +869,19 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                         <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
                             <div className="relative">
                                 <button 
-                                    onClick={() => setIsCopyMenuOpen(!isCopyMenuOpen)} 
-                                    className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md"
+                                    onClick={() => !copyFeedback && setIsCopyMenuOpen(!isCopyMenuOpen)} 
+                                    disabled={copyFeedback}
+                                    className={`flex items-center gap-2 font-bold py-2 px-4 rounded-lg transition-all duration-300 shadow-sm hover:shadow-md ${
+                                        copyFeedback 
+                                        ? 'bg-green-600 text-white cursor-default' 
+                                        : 'bg-gray-500 hover:bg-gray-600 text-white'
+                                    }`}
                                 >
-                                    <CopyIcon /> Salin Data
+                                    {copyFeedback ? <CheckIcon /> : <CopyIcon />}
+                                    {copyFeedback ? 'Tersalin!' : 'Salin Data'}
                                 </button>
                                 {isCopyMenuOpen && (
-                                    <div className="absolute bottom-full mb-2 left-0 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-20 flex flex-col overflow-hidden">
+                                    <div className="absolute bottom-full mb-2 left-0 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-20 flex flex-col overflow-hidden animate-scale-in">
                                         <button 
                                             onClick={() => handleCopyData('opsId')}
                                             className="px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors border-b border-gray-100"
@@ -943,6 +972,17 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                     </div>
                 )}
             </Modal>
+
+            {/* Toast Notification */}
+            <div 
+                className={`fixed bottom-6 left-1/2 transform -translate-x-1/2 z-[60] transition-all duration-500 ease-in-out ${
+                    toast.show ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'
+                }`}
+            >
+                <div className="bg-gray-800 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 min-w-[300px] justify-center backdrop-blur-sm bg-opacity-90 border border-gray-700">
+                    <span className="text-sm font-medium">{toast.message}</span>
+                </div>
+            </div>
         </div>
     );
 };
