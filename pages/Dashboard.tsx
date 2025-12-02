@@ -580,7 +580,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
           // Format: OpsID [TAB] ShiftID [TAB] SUNTER DC
           const shiftId = selectedSession.shiftId;
           const location = "SUNTER DC";
-          textToCopy = validRecords.map(record => `${record.opsId}\t${shiftId}\t${location}`).join('\n');
+          textToCopy = validRecords.map(record => `${record.opsId}\t${shiftId}\t${shiftId}\t${location}`).join('\n');
       }
       
       if (textToCopy) {
